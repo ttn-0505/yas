@@ -1,37 +1,34 @@
 pipeline {
     agent any
+    
+    // Khai báo môi trường để dùng SonarQube
+    environment {
+        SCANNER_HOME = tool 'SonarScanner' // Tên này phải khớp với cấu hình trong Global Tool
+    }
 
     stages {
         stage('1. Checkout Code') {
             steps {
-                echo 'Downloading source code from GitHub to Jenkins...'
+                echo 'Downloading source code...'
                 checkout scm
             }
         }
 
-        stage('2. Build & Test') {
+        stage('2. Build & Test with Coverage') {
             steps {
-                echo 'Running Unit Tests with Maven...'
-                // Actual command placeholder: sh './mvnw clean test'
-                sh 'echo "This stage will execute Build and run Tests to calculate Coverage > 70%"'
+                echo 'Running Maven Build and Jacoco Test Report...'
+                // Lệnh này vừa build vừa chạy test để tạo file báo cáo coverage
+                sh './mvnw clean verify' 
             }
         }
 
         stage('3. SonarQube Analysis') {
             steps {
-                echo 'Scanning code quality with SonarQube...'
-                // This stage fulfills Requirement #5 of the project
-                sh 'echo "Sending analysis data to localhost:9000..."'
+                // Đoạn này giúp Jenkins tự động đẩy kết quả lên SonarQube
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh './mvnw sonar:sonar -Dsonar.projectKey=YAS-Project'
+                }
             }
-        }
-    }
-
-    post {
-        success {
-            echo 'CI Pipeline completed successfully!'
-        }
-        failure {
-            echo 'CI Pipeline failed! Please check the logs.'
         }
     }
 }
