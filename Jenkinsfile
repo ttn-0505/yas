@@ -3,7 +3,7 @@ pipeline {
     
     environment {
         SONAR_SCANNER_HOME = tool 'SonarScanner' // Tên phải khớp với Manage Jenkins -> Tools
-        SNYK_TOKEN = credentials('snyk-token-id') 
+        SNYK_TOKEN = credentials('snyk_uat.1fcad39e.eyJlIjoxNzg0NTU5MzQyLCJoIjoic255ay5pbyIsImoiOiJBWjJ3akhMdE9FdUtvdDE2S29oUWZ3IiwicyI6IkdOZkJCYUx0VEhxM091TDRLZVdBZGciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.QnHxOT7Idf0tW5uEF_uzkCug_UK2coGw6EAjTHQzzTjEk5CXzhN9p6SCZB6ykTXtdiFK0QsA4po6i-e7AFGZBg') 
     }
 
     stages {
