@@ -19,7 +19,7 @@ pipeline {
             steps {
                 echo 'Đang quét lộ lọt thông tin bảo mật (Secrets, Keys)...'
                 // Chạy gitleaks trên toàn bộ repo
-                bat 'gitleaks detect --source . -v || echo "Cảnh báo: Phát hiện hoặc chưa cài đặt Gitleaks"'
+                sh 'gitleaks detect --source . -v || echo "Cảnh báo: Phát hiện hoặc chưa cài đặt Gitleaks"'
             }
         }
 
@@ -36,7 +36,7 @@ pipeline {
                     steps {
                         dir('media') {
                             echo 'Đang chạy Unit Test và đo độ phủ code cho Media Service...'
-                            bat 'mvn clean test jacoco:report'
+                            sh 'mvn clean test jacoco:report'
                         }
                     }
                     post {
@@ -58,8 +58,8 @@ pipeline {
                     steps {
                         dir('media') {
                             echo 'Đang quét chất lượng code (SonarQube) và lỗ hổng (Snyk)...'
-                            bat "mvn sonar:sonar -Dsonar.projectKey=yas-media -Dsonar.login=${SONAR_TOKEN}"
-                            bat "snyk test --token=${SNYK_TOKEN}"
+                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-media -Dsonar.login=${SONAR_TOKEN}"
+                            sh "snyk test --token=${SNYK_TOKEN}"
                         }
                     }
                 }
@@ -67,7 +67,7 @@ pipeline {
                     steps {
                         dir('media') {
                             echo 'Đang đóng gói Media Service...'
-                            bat 'mvn package -DskipTests'
+                            sh 'mvn package -DskipTests'
                         }
                     }
                 }
@@ -85,7 +85,7 @@ pipeline {
                 stage('Product: Test & Coverage') {
                     steps {
                         dir('product') {
-                            bat 'mvn clean test jacoco:report'
+                            sh 'mvn clean test jacoco:report'
                         }
                     }
                     post {
@@ -103,15 +103,15 @@ pipeline {
                 stage('Product: Security & Quality Scan') {
                     steps {
                         dir('product') {
-                            bat "mvn sonar:sonar -Dsonar.projectKey=yas-product -Dsonar.login=${SONAR_TOKEN}"
-                            bat "snyk test --token=${SNYK_TOKEN}"
+                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-product -Dsonar.login=${SONAR_TOKEN}"
+                            sh "snyk test --token=${SNYK_TOKEN}"
                         }
                     }
                 }
                 stage('Product: Build') {
                     steps {
                         dir('product') {
-                            bat 'mvn package -DskipTests'
+                            sh 'mvn package -DskipTests'
                         }
                     }
                 }
@@ -129,7 +129,7 @@ pipeline {
                 stage('Cart: Test & Coverage') {
                     steps {
                         dir('cart') {
-                            bat 'mvn clean test jacoco:report'
+                            sh 'mvn clean test jacoco:report'
                         }
                     }
                     post {
@@ -147,15 +147,15 @@ pipeline {
                 stage('Cart: Security & Quality Scan') {
                     steps {
                         dir('cart') {
-                            bat "mvn sonar:sonar -Dsonar.projectKey=yas-cart -Dsonar.login=${SONAR_TOKEN}"
-                            bat "snyk test --token=${SNYK_TOKEN}"
+                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-cart -Dsonar.login=${SONAR_TOKEN}"
+                            sh "snyk test --token=${SNYK_TOKEN}"
                         }
                     }
                 }
                 stage('Cart: Build') {
                     steps {
                         dir('cart') {
-                            bat 'mvn package -DskipTests'
+                            sh 'mvn package -DskipTests'
                         }
                     }
                 }
