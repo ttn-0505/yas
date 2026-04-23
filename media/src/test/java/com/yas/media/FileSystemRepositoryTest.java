@@ -107,5 +107,39 @@ class FileSystemRepositoryTest {
         assertThrows(IllegalStateException.class, () -> fileSystemRepository.getFile(filePathStr));
     }
 
+    // Thêm Unit Test
+    @Test
+    void testPersistFile_whenDirectoryExists_thenSaveSuccessfully() throws IOException {
+        // Chuẩn bị thư mục test
+        Path testDir = Paths.get(TEST_URL);
+        if (!Files.exists(testDir)) {
+            Files.createDirectories(testDir);
+        }
+        
+        String filename = "success-file.txt";
+        byte[] content = "Hello DevOps".getBytes();
+        
+        when(filesystemConfig.getDirectory()).thenReturn(TEST_URL);
+
+        // Thực thi
+        fileSystemRepository.persistFile(filename, content);
+
+        // Kiểm tra file có tồn tại trên ổ đĩa không
+        Path filePath = testDir.resolve(filename);
+        assert(Files.exists(filePath));
+        assertArrayEquals(content, Files.readAllBytes(filePath));
+    }
+
+    @Test
+    void testGetFile_whenFileNotFound_thenThrowsException() {
+        String filename = "not-found.png";
+        String filePathStr = Paths.get(TEST_URL, filename).toString();
+        
+        when(filesystemConfig.getDirectory()).thenReturn(TEST_URL);
+
+        // Giả sử logic của bạn ném IllegalStateException khi không thấy file
+        assertThrows(IllegalStateException.class, () -> fileSystemRepository.getFile(filePathStr));
+    }
+
 }
 

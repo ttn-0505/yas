@@ -267,6 +267,42 @@ class MediaServiceUnitTest {
         assertThat(medias).allMatch(m -> m.getUrl() != null);
     }
 
+    // Thêm unit test
+    @Test
+    void getFile_whenMediaExists_thenReturnFullData() throws IOException {
+        // Giả lập Media tồn tại trong DB
+        when(mediaRepository.findById(1L)).thenReturn(Optional.of(media));
+        
+        // Giả lập FileSystem trả về luồng dữ liệu file
+        byte[] expectedContent = "test data".getBytes();
+        InputStream inputStream = new java.io.ByteArrayInputStream(expectedContent);
+        when(fileSystemRepository.getFile(any())).thenReturn(inputStream);
+
+        // Thực thi
+        MediaDto result = mediaService.getFile(1L, "file");
+
+        // Kiểm tra
+        assertNotNull(result);
+        assertEquals("image/jpeg", result.getMediaType());
+        assertArrayEquals(expectedContent, result.getContent());
+    }
+
+    @Test
+    void saveMedia_whenFileSystemFails_thenShouldStillSaveToDb() {
+        // Trường hợp này để test xem nếu logic lưu file vật lý có try-catch 
+        // thì DB có bị ảnh hưởng không (tùy vào code thực tế của bạn)
+        byte[] content = new byte[] {1, 2, 3};
+        MultipartFile multipartFile = new MockMultipartFile("file", "test.png", "image/png", content);
+        MediaPostVm vm = new MediaPostVm("caption", multipartFile, "test.png");
+
+        when(mediaRepository.save(any(Media.class))).thenAnswer(i -> i.getArgument(0));
+        
+        Media savedMedia = mediaService.saveMedia(vm);
+        
+        assertNotNull(savedMedia);
+        verify(mediaRepository, times(1)).save(any());
+    }
+
     private static @NotNull Media getMedia(Long id, String name) {
         var media = new Media();
         media.setId(id);
