@@ -10,7 +10,7 @@ pipeline {
     environment {
         // Các Token bảo mật được lấy từ Credentials của Jenkins
         SNYK_TOKEN = credentials('snyk-api-token')
-        SONAR_TOKEN = credentials('sonar-qube-token')
+        SONAR_TOKEN = credentials('sonarqube-token')
     }
 
     stages {
