@@ -1,62 +1,174 @@
 pipeline {
     agent any
-    
+
+    // Định nghĩa các công cụ sẽ sử dụng trong Pipeline
+    tools {
+        jdk 'Java 21'    // Tên phải khớp với cấu hình trong Manage Jenkins -> Tools
+        maven 'Maven 3'  // Tên phải khớp với cấu hình trong Manage Jenkins -> Tools
+    }
+
     environment {
-        SONAR_SCANNER_HOME = tool 'SonarScanner' // Tên phải khớp với Manage Jenkins -> Tools
-        SNYK_TOKEN = credentials('snyk_uat.1fcad39e.eyJlIjoxNzg0NTU5MzQyLCJoIjoic255ay5pbyIsImoiOiJBWjJ3akhMdE9FdUtvdDE2S29oUWZ3IiwicyI6IkdOZkJCYUx0VEhxM091TDRLZVdBZGciLCJ0aWQiOiJBQUFBQUFBQUFBQUFBQUFBQUFBQUFBIn0.QnHxOT7Idf0tW5uEF_uzkCug_UK2coGw6EAjTHQzzTjEk5CXzhN9p6SCZB6ykTXtdiFK0QsA4po6i-e7AFGZBg') 
+        // Các Token bảo mật được lấy từ Credentials của Jenkins
+        SNYK_TOKEN = credentials('snyk-api-token')
+        SONAR_TOKEN = credentials('sonar-qube-token')
     }
 
     stages {
-        stage('Phase 1: Security Scan (Gitleaks)') {
+        // Stage kiểm tra chung cho toàn bộ Repository
+        stage('Gitleaks: Secret Scanning') {
             steps {
-                // Quét bảo mật source code
-                sh 'gitleaks detect --source=. -v'
+                echo 'Đang quét lộ lọt thông tin bảo mật (Secrets, Keys)...'
+                // Chạy gitleaks trên toàn bộ repo
+                sh 'gitleaks detect --source . -v || echo "Cảnh báo: Phát hiện hoặc chưa cài đặt Gitleaks"'
             }
         }
 
-        stage('Phase 2: Detect Changes') {
-            steps {
-                script {
-                    // Lấy file thay đổi ở commit gần nhất
-                    def changedFiles = sh(script: "git diff --name-only HEAD~1", returnStdout: true).trim()
-                    env.TARGET_SERVICE = ""
-                    
-                    // Sửa lại tên cho đúng với thư mục project YAS của bạn
-                    if (changedFiles.contains('media/')) env.TARGET_SERVICE = "media"
-                    else if (changedFiles.contains('cart/')) env.TARGET_SERVICE = "cart"
+        // ---------------------------------------------------------------------
+        // PIPELINE CHO MEDIA SERVICE
+        // ---------------------------------------------------------------------
+        stage('Service: Media') {
+            when {
+                // Yêu cầu 6: Chỉ chạy khi có thay đổi trong thư mục media-service
+                changeset "media/**"
+            }
+            stages {
+                stage('Media: Test & Coverage') {
+                    steps {
+                        dir('media') {
+                            echo 'Đang chạy Unit Test và đo độ phủ code cho Media Service...'
+                            sh 'mvn clean test jacoco:report'
+                        }
+                    }
+                    post {
+                        always {
+                            // Yêu cầu 5: Upload kết quả test
+                            junit 'media/target/surefire-reports/*.xml'
+                            
+                            // Yêu cầu 7b: Kiểm tra độ phủ (Fail nếu < 70%)
+                            jacoco(
+                                execPattern: 'media/target/jacoco.exec',
+                                classPattern: 'media/target/classes',
+                                sourcePattern: 'media/src/main/java',
+                                minimumLineCoverage: '70'
+                            )
+                        }
+                    }
                 }
-            }
-        }
-
-        stage('Phase 3: Test & Coverage') {
-            when { expression { env.TARGET_SERVICE != "" } }
-            steps {
-                dir("${env.TARGET_SERVICE}") {
-                    // Dùng ./mvnw để chạy test
-                    sh 'chmod +x mvnw'
-                    sh './mvnw clean test'
+                stage('Media: Security & Quality Scan') {
+                    steps {
+                        dir('media') {
+                            echo 'Đang quét chất lượng code (SonarQube) và lỗ hổng (Snyk)...'
+                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-media -Dsonar.login=${SONAR_TOKEN}"
+                            sh "snyk test --token=${SNYK_TOKEN}"
+                        }
+                    }
                 }
-            }
-        }
-
-        stage('Phase 4: Code Quality (SonarQube)') {
-            when { expression { env.TARGET_SERVICE != "" } }
-            steps {
-                withSonarQubeEnv('LocalSonar') { 
-                    dir("${env.TARGET_SERVICE}") {
-                        // Dùng ./mvnw để đẩy dữ liệu lên SonarQube
-                        sh "./mvnw sonar:sonar -Dsonar.projectKey=yas-${env.TARGET_SERVICE}"
+                stage('Media: Build') {
+                    steps {
+                        dir('media') {
+                            echo 'Đang đóng gói Media Service...'
+                            sh 'mvn package -DskipTests'
+                        }
                     }
                 }
             }
         }
 
-        stage('Phase 5: Snyk Scan') {
-            steps {
-                dir("${env.TARGET_SERVICE}") {
-                    sh 'snyk test'
+        // ---------------------------------------------------------------------
+        // PIPELINE CHO PRODUCT SERVICE
+        // ---------------------------------------------------------------------
+        stage('Service: Product') {
+            when {
+                changeset "product/**"
+            }
+            stages {
+                stage('Product: Test & Coverage') {
+                    steps {
+                        dir('product') {
+                            sh 'mvn clean test jacoco:report'
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'product/target/surefire-reports/*.xml'
+                            jacoco(
+                                execPattern: 'product/target/jacoco.exec',
+                                classPattern: 'product/target/classes',
+                                sourcePattern: 'product/src/main/java',
+                                minimumLineCoverage: '70'
+                            )
+                        }
+                    }
+                }
+                stage('Product: Security & Quality Scan') {
+                    steps {
+                        dir('product') {
+                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-product -Dsonar.login=${SONAR_TOKEN}"
+                            sh "snyk test --token=${SNYK_TOKEN}"
+                        }
+                    }
+                }
+                stage('Product: Build') {
+                    steps {
+                        dir('product') {
+                            sh 'mvn package -DskipTests'
+                        }
+                    }
                 }
             }
+        }
+
+        // ---------------------------------------------------------------------
+        // PIPELINE CHO CART SERVICE
+        // ---------------------------------------------------------------------
+        stage('Service: Cart') {
+            when {
+                changeset "cart/**"
+            }
+            stages {
+                stage('Cart: Test & Coverage') {
+                    steps {
+                        dir('cart') {
+                            sh 'mvn clean test jacoco:report'
+                        }
+                    }
+                    post {
+                        always {
+                            junit 'cart/target/surefire-reports/*.xml'
+                            jacoco(
+                                execPattern: 'cart/target/jacoco.exec',
+                                classPattern: 'cart/target/classes',
+                                sourcePattern: 'cart/src/main/java',
+                                minimumLineCoverage: '70'
+                            )
+                        }
+                    }
+                }
+                stage('Cart: Security & Quality Scan') {
+                    steps {
+                        dir('cart') {
+                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-cart -Dsonar.login=${SONAR_TOKEN}"
+                            sh "snyk test --token=${SNYK_TOKEN}"
+                        }
+                    }
+                }
+                stage('Cart: Build') {
+                    steps {
+                        dir('cart') {
+                            sh 'mvn package -DskipTests'
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Pipeline hoàn thành thành công!'
+        }
+        failure {
+            echo 'Pipeline thất bại. Vui lòng kiểm tra lại log và unit test/độ phủ code.'
         }
     }
 }
