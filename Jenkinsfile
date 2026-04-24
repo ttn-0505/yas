@@ -13,7 +13,7 @@ pipeline {
         SNYK_HOME = tool 'snyk'
         GITLEAKS_HOME = tool 'gitleaks'
         // Token xác thực (cần tạo Credentials trong Jenkins)
-        SONAR_TOKEN = credentials('sonar-qube-token')
+        SONAR_TOKEN = credentials('sonarqube-token')
         SNYK_TOKEN = credentials('snyk-api-token')
     }
 
