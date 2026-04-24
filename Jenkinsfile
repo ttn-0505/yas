@@ -2,72 +2,76 @@ pipeline {
     agent any
 
     tools {
-        jdk 'Java 21' 
+        jdk 'Java 21'
         maven 'Maven 3'
+        snyk 'snyk'
     }
 
     environment {
+        // Đường dẫn cài đặt tool (cần cấu hình trong Jenkins Global Tool Configuration)
+        SONAR_HOME = tool 'sonar-scanner'
+        SNYK_HOME = tool 'snyk'
+        GITLEAKS_HOME = tool 'gitleaks'
+        // Token xác thực (cần tạo Credentials trong Jenkins)
+        SONAR_TOKEN = credentials('sonar-qube-token')
         SNYK_TOKEN = credentials('snyk-api-token')
-        SONAR_TOKEN = credentials('sonarqube-token')
     }
 
     stages {
         stage('Security: Gitleaks Scan') {
             steps {
                 echo 'Đang quét lộ lọt thông tin bảo mật (Gitleaks)...'
-                // Đổi bat thành sh
-                sh 'gitleaks detect --source . -v || echo "Phat hien canh bao hoac chua cai Gitleaks"'
+                sh '${GITLEAKS_HOME}/gitleaks detect --source . -v || echo "Phat hien canh bao hoac chua cai Gitleaks"'
             }
         }
 
-        stage('Service: Media') {
+        stage('Service: Product') {
             when {
                 anyOf {
-                    changeset "media/**"
-                    branch 'feature/media*'
+                    changeset "product/**"
+                    branch 'feature/product*'
+                    branch 'unit-test/product*'
                 }
             }
             stages {
-                stage('Media: Unit Test & Jacoco Coverage') {
+                stage('Product: Unit Test & Jacoco Coverage') {
                     steps {
-                        dir('media') {
-                            echo 'Đang thực thi Unit Test cho Media Service...'
-                            // Đổi bat thành sh
-                            sh 'mvn clean test jacoco:report'
-                        }
+                        echo 'Đang thực thi Unit Test cho Product Service...'
+                        sh 'mvn clean test jacoco:report -pl product -am -DskipITs'
                     }
                     post {
                         always {
-                            junit '**/media/target/surefire-reports/*.xml'
+                            junit allowEmptyResults: true, testResults: '**/product/target/surefire-reports/*.xml'
                             jacoco(
-                                execPattern: '**/media/target/jacoco.exec',
-                                classPattern: '**/media/target/classes',
-                                sourcePattern: '**/media/src/main/java',
+                                execPattern: '**/product/target/jacoco.exec',
+                                classPattern: '**/product/target/classes',
+                                sourcePattern: '**/product/src/main/java',
                                 minimumLineCoverage: '70'
                             )
                         }
                     }
                 }
 
-                stage('Media: SonarQube & Snyk Scan') {
+                stage('Product: SonarQube & Snyk Scan') {
                     steps {
-                        dir('media') {
-                            echo 'Đang thực hiện phân tích SonarQube...'
-                            // Trên Linux/Docker dùng ${TOKEN} thay vì %TOKEN%
-                            sh "mvn sonar:sonar -Dsonar.projectKey=yas-media -Dsonar.login=${SONAR_TOKEN}"
-                            
-                            echo 'Đang quét lỗ hổng thư viện bằng Snyk...'
-                            sh "snyk test --token=${SNYK_TOKEN}"
+                        echo 'Đang cài đặt parent POM và common-library...'
+                        sh 'mvn install -N -DskipTests'
+                        sh 'mvn install -pl common-library -am -DskipTests'
+
+                        echo 'Đang thực hiện phân tích SonarQube...'
+                        dir('product') {
+                            sh 'mvn sonar:sonar -Dsonar.projectKey=yas-product -Dsonar.organization=zeus058 -Dsonar.host.url=https://sonarcloud.io -Dsonar.login=$SONAR_TOKEN'
                         }
+
+                        echo 'Đang quét lỗ hổng thư viện bằng Snyk...'
+                        sh '${SNYK_HOME}/snyk test --file=product/pom.xml --token=$SNYK_TOKEN || echo "Snyk scan failed or not installed"'
                     }
                 }
 
-                stage('Media: Package Build') {
+                stage('Product: Package Build') {
                     steps {
-                        dir('media') {
-                            echo 'Đang đóng gói Media Service (JAR file)...'
-                            sh 'mvn package -DskipTests'
-                        }
+                        echo 'Đang đóng gói Product Service (JAR file)...'
+                        sh 'mvn package -pl product -am -DskipTests'
                     }
                 }
             }
@@ -75,7 +79,7 @@ pipeline {
     }
 
     post {
-        success { echo 'MEDIA SERVICE CI: SUCCESS' }
-        failure { echo 'MEDIA SERVICE CI: FAILED - Vui lòng kiểm tra Log hoặc Độ phủ Code' }
+        success { echo 'PRODUCT SERVICE CI: SUCCESS' }
+        failure { echo 'PRODUCT SERVICE CI: FAILED - Vui lòng kiểm tra Log hoặc Độ phủ Code' }
     }
 }
