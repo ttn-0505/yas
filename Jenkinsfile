@@ -77,5 +77,5 @@ pipeline {
     post {
         success { echo 'MEDIA SERVICE CI: SUCCESS' }
         failure { echo 'MEDIA SERVICE CI: FAILED - Vui lòng kiểm tra Log hoặc Độ phủ Code' }
-    
+    }
 }
