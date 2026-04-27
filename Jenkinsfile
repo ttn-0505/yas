@@ -8,7 +8,6 @@ pipeline {
     tools {
         jdk 'Java 21'
         maven 'Maven 3'
-        snyk 'snyk'
     }
 
     stages {
