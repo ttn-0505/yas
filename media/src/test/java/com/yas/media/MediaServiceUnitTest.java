@@ -3,6 +3,7 @@ package com.yas.media;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 import com.yas.commonlibrary.exception.NotFoundException;
@@ -166,6 +167,78 @@ class MediaServiceUnitTest {
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void toVm_whenMediaFieldsAreNull_thenReturnVmWithNulls() {
+        Media nullMedia = new Media();
+        nullMedia.setId(99L);
+        // Không set caption, fileName, mediaType để test logic null trong Mapper
+
+        MediaVm result = mediaVmMapper.toVm(nullMedia);
+
+        assertNotNull(result);
+        assertEquals(99L, result.getId());
+        assertNull(result.getCaption());
+        assertNull(result.getFileName());
+    }
+
+    @Test
+    void toVm_whenMediaIsComplete_thenReturnFullVm() {
+        Media fullMedia = new Media();
+        fullMedia.setId(100L);
+        fullMedia.setCaption("Full Caption");
+        fullMedia.setFileName("full.jpg");
+        fullMedia.setMediaType("image/jpeg");
+
+        MediaVm result = mediaVmMapper.toVm(fullMedia);
+
+        assertEquals("Full Caption", result.getCaption());
+        assertEquals("full.jpg", result.getFileName());
+        assertEquals("image/jpeg", result.getMediaType());
+    }
+
+    @Test
+    void toVm_whenFieldsAreNull_shouldCoverAllMapperBranches() {
+        // Tạo object Media nhưng để trống các field để ép Mapper chạy vào các nhánh 'else'
+        com.yas.media.model.Media emptyMedia = new com.yas.media.model.Media();
+        emptyMedia.setId(100L);
+        emptyMedia.setCaption(null);
+        emptyMedia.setFileName(null);
+
+        com.yas.media.viewmodel.MediaVm result = mediaVmMapper.toVm(emptyMedia);
+        
+        assertNotNull(result);
+        assertNull(result.getCaption());
+        assertNull(result.getFileName());
+    }
+
+    @Test
+    void toVm_whenAllOptionalFieldsAreNull_shouldCoverElseBranches() {
+        // Tạo object Media tối giản nhất có thể
+        Media minimalMedia = new Media();
+        minimalMedia.setId(500L);
+        // Để mặc định (null) cho caption, fileName, mediaType...
+        
+        MediaVm result = mediaVmMapper.toVm(minimalMedia);
+        
+        assertNotNull(result);
+        assertEquals(500L, result.getId());
+        assertNull(result.getCaption());
+        assertNull(result.getFileName());
+    }
+
+    @Test
+    void toVm_whenEmptyStrings_shouldCoverBranches() {
+        Media media = new Media();
+        media.setId(501L);
+        media.setCaption("");
+        media.setFileName("");
+        
+        MediaVm result = mediaVmMapper.toVm(media);
+        
+        assertEquals("", result.getCaption());
+        assertEquals("", result.getFileName());
     }
 
     private static @NotNull Media getMedia(Long id, String name) {
