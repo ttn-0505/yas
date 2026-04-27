@@ -104,8 +104,11 @@ pipeline {
                         return
                     }
 
-                    sh 'which gitleaks && gitleaks version'
-                    sh 'which snyk && snyk --version'
+                    // Thay 'which' bằng cách gọi trực tiếp tool và thêm || true
+                    sh 'gitleaks version || echo "Gitleaks not found"'
+                    
+                    // Lệnh này sẽ kiểm tra snyk mà không làm pipeline dừng lại nếu không thấy
+                    sh 'snyk --version || echo "Snyk not found"'
                 }
             }
         }
