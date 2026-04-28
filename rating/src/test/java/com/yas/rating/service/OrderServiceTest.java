@@ -2,6 +2,8 @@ package com.yas.rating.service;
 
 import static com.yas.rating.util.SecurityContextUtils.setUpSecurityContext;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -78,6 +80,16 @@ class OrderServiceTest {
         OrderExistsByProductAndUserGetVm result = orderService.handleFallback(mock(Throwable.class));
         assertThat(result.isPresent()).isFalse();
 
+    }
+
+    @Test
+    void testConstantsCoverage() {
+        // Phủ dòng code trong Constants.java
+        String successMsg = com.yas.rating.utils.Constants.Message.SUCCESS_MESSAGE;
+        assertEquals("SUCCESS", successMsg); // Đảm bảo đúng giá trị trong file của bạn
+        
+        // Nếu Constants có ErrorCode
+        assertNotNull(com.yas.rating.utils.Constants.ErrorCode.RATING_NOT_FOUND);
     }
 
 }

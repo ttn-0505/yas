@@ -173,4 +173,17 @@ class RatingControllerTest {
             ).andExpect(status().isOk());
     }
 
+    @Test
+    void testCreateRating_WithNullContent_ShouldStillProcess() throws Exception {
+        // Test trường hợp content null hoặc các thuộc tính khác để phủ nốt các dòng mapping
+        RatingPostVm vm = new RatingPostVm(null, 0, 0L, null);
+        when(ratingService.createRating(any(RatingPostVm.class))).thenReturn(ratingVm);
+
+        this.mockMvc.perform(post("/storefront/ratings")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectWriter.writeValueAsString(vm))
+        )
+                .andExpect(status().isOk());
+    }
+
 }

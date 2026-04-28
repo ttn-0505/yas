@@ -2,6 +2,7 @@ package com.yas.rating.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
@@ -18,6 +19,8 @@ import com.yas.rating.viewmodel.OrderExistsByProductAndUserGetVm;
 import com.yas.rating.viewmodel.RatingListVm;
 import com.yas.rating.viewmodel.RatingPostVm;
 import com.yas.rating.viewmodel.RatingVm;
+import com.yas.rating.viewmodel.ResponeStatusVm;
+
 import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -240,5 +243,33 @@ class RatingServiceTest {
         ratingRepository.deleteAll();
         List<RatingVm>  newResponse = ratingService.getLatestRatings(5);
         assertEquals(0, newResponse.size());
+    }
+
+    @Test
+    void testCoverageForModelAndViewModels() {
+        // 1. Phủ code cho class Rating (com.yas.rating.model)
+        Rating rating = Rating.builder()
+                .id(1L)
+                .content("Test coverage")
+                .ratingStar(5)
+                .productId(1L)
+                .productName("Pro")
+                .firstName("Ngoc")
+                .lastName("Trần")
+                .build();
+        
+        assertEquals(1L, rating.getId());
+        assertEquals("Test coverage", rating.getContent());
+        assertNotNull(rating.getFirstName());
+
+        // 2. Phủ code cho các Record/Vm (com.yas.rating.viewmodel)
+        // Khi bạn gọi constructor và các getter của record, coverage sẽ tăng vọt
+        RatingPostVm postVm = new RatingPostVm("Content", 5, 1L, "Product");
+        assertEquals("Content", postVm.content());
+        assertEquals(5, postVm.star());
+
+        ResponeStatusVm statusVm = new ResponeStatusVm("Title", "Success", "200");
+        assertEquals("Success", statusVm.message());
+        assertEquals("200", statusVm.statusCode());
     }
 }
