@@ -1,4 +1,4 @@
-package com.yas.cart.util;
+package com.yas.cart.utils;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
