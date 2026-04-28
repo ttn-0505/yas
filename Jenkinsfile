@@ -105,7 +105,7 @@ pipeline {
                     }
 
                     sh 'which gitleaks && gitleaks version'
-                    sh 'which snyk && snyk --version'
+                    sh 'snyk --version'
                 }
             }
         }
