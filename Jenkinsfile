@@ -63,6 +63,19 @@ pipeline {
             }
         }
 
+        stage('Install Dependencies') {
+            steps {
+                script {
+                    // Cài python3 nếu chưa có
+                    sh '''
+                        if ! command -v python3 &> /dev/null; then
+                            apt-get update && apt-get install -y python3
+                        fi
+                    '''
+                }
+            }
+        }
+
         stage('Test & Build Changed Services') {
             steps {
                 script {
