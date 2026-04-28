@@ -105,7 +105,7 @@ pipeline {
                     }
 
                     sh 'which gitleaks && gitleaks version'
-                    sh 'which snyk && snyk --version'
+                    sh 'snyk --version || echo "Snyk CLI is downloading or not in PATH yet"'
                 }
             }
         }
@@ -225,7 +225,7 @@ pipeline {
                         return
                     }
 
-                    withCredentials([string(credentialsId: 'snyk-token', variable: 'SNYK_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'snyk-api-token', variable: 'SNYK_TOKEN')]) {
                         int snykAuthStatus = sh(
                             script: 'SNYK_TOKEN="$SNYK_TOKEN" snyk whoami >/dev/null 2>&1',
                             returnStatus: true
