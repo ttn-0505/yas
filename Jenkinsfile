@@ -8,7 +8,6 @@ pipeline {
     tools {
         jdk 'Java 21'
         maven 'Maven 3'
-        snyk 'snyk'
     }
 
     stages {
@@ -95,22 +94,20 @@ pipeline {
         }
 
         stage('Check Tools') {
-    steps {
-        script {
-            // Lấy đường dẫn thực tế từ Jenkins Tools
-            def jdkHome = tool name: 'Java 21', type: 'jdk'
-            def snykHome = tool name: 'snyk', type: 'com.isencia.jenkins.plugin.snyk.SnykStep$SnykInstallation'
-            
-            // Thiết lập môi trường để chạy lệnh sh
-            withEnv(["JAVA_HOME=${jdkHome}", "PATH+JDK=${jdkHome}/bin", "PATH+SNYK=${snykHome}"]) {
-                sh 'java -version'
-                sh 'mvn -version'
-                sh 'snyk --version'
-                sh 'gitleaks version'
+            steps {
+                script {
+                    def changedServices = env.CHANGED_SERVICES ? env.CHANGED_SERVICES.split(',').findAll { it?.trim() } : []
+
+                    if (changedServices.isEmpty()) {
+                        echo 'No service changes detected. Skipping tool checks.'
+                        return
+                    }
+
+                    sh 'which gitleaks && gitleaks version'
+                    sh 'which snyk && snyk --version'
+                }
             }
         }
-    }
-}
 
         stage('Gitleaks Scan') {
             steps {
@@ -188,7 +185,7 @@ pipeline {
                         return
                     }
 
-                    withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
                         changedServices.each { serviceName ->
                             def serviceDir = serviceName.trim()
                             echo "Running SonarQube scan for ${serviceDir}..."
