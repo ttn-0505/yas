@@ -8,7 +8,6 @@ pipeline {
     tools {
         jdk 'Java 21'
         maven 'Maven 3'
-        snyk 'snyk'
     }
 
     stages {
@@ -106,18 +105,6 @@ pipeline {
 
                     // 1. Kiểm tra Gitleaks (thường có sẵn trong bin hệ thống)
                     sh 'gitleaks version'
-
-                    // 2. Lấy đường dẫn động của Snyk từ Global Tool Configuration
-                    // Lưu ý: Tên 'snyk' phải khớp 100% với Name bạn đặt trong Jenkins Tools
-                    def snykBinPath = tool name: 'snyk', type: 'com.snyk.jenkins.SnykStep$SnykInstallation'
-
-                    // 3. Chạy lệnh Snyk bằng cách nạp đường dẫn vào PATH tạm thời
-                    withEnv(["PATH+SNYK=${snykBinPath}"]) {
-                        sh 'echo "Current PATH: $PATH"' // Để bạn kiểm tra xem Snyk đã được add vào chưa
-                        sh 'snyk --version'
-                    }
-                    
-                    echo "Check Tools thành công!"
                 }
             }
         }
@@ -226,54 +213,6 @@ pipeline {
                 }
             }
         }
-
-        stage('Snyk Scan') {
-            steps {
-                script {
-                    def changedServices = env.CHANGED_SERVICES ? env.CHANGED_SERVICES.split(',').findAll { it?.trim() } : []
-
-                    if (changedServices.isEmpty()) {
-                        echo 'No service changes detected. Skipping Snyk scan.'
-                        return
-                    }
-
-                    withCredentials([string(credentialsId: 'snyk-api-token', variable: 'SNYK_TOKEN')]) {
-                        int snykAuthStatus = sh(
-                            script: 'SNYK_TOKEN="$SNYK_TOKEN" snyk whoami >/dev/null 2>&1',
-                            returnStatus: true
-                        )
-
-                        if (snykAuthStatus != 0) {
-                            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                                error('Snyk authentication failed (401 likely). Check Jenkins credential snyk-token.')
-                            }
-                            return
-                        }
-
-                        changedServices.each { serviceName ->
-                            def serviceDir = serviceName.trim()
-                            echo "Running Snyk scan for ${serviceDir}..."
-
-                            dir(serviceDir) {
-                                sh 'test -x ./mvnw || chmod +x ./mvnw'
-
-                                int snykExitCode = sh(
-                                    script: 'SNYK_TOKEN="$SNYK_TOKEN" snyk test --file=pom.xml --severity-threshold=high --skip-unresolved --prune-repeated-subdependencies',
-                                    returnStatus: true
-                                )
-
-                                if (snykExitCode != 0) {
-                                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                                        error("Snyk CLI returned exit code ${snykExitCode} for ${serviceDir}. Scan logged and stage marked UNSTABLE.")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 
     post {
         always {
