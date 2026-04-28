@@ -104,8 +104,20 @@ pipeline {
                         return
                     }
 
-                    sh 'which gitleaks && gitleaks version'
-                    sh 'snyk --version'
+                    // 1. Kiểm tra Gitleaks (thường có sẵn trong bin hệ thống)
+                    sh 'gitleaks version'
+
+                    // 2. Lấy đường dẫn động của Snyk từ Global Tool Configuration
+                    // Lưu ý: Tên 'snyk' phải khớp 100% với Name bạn đặt trong Jenkins Tools
+                    def snykBinPath = tool name: 'snyk', type: 'com.snyk.jenkins.SnykStep$SnykInstallation'
+
+                    // 3. Chạy lệnh Snyk bằng cách nạp đường dẫn vào PATH tạm thời
+                    withEnv(["PATH+SNYK=${snykBinPath}"]) {
+                        sh 'echo "Current PATH: $PATH"' // Để bạn kiểm tra xem Snyk đã được add vào chưa
+                        sh 'snyk --version'
+                    }
+                    
+                    echo "Check Tools thành công!"
                 }
             }
         }
