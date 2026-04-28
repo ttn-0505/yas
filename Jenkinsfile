@@ -95,20 +95,22 @@ pipeline {
         }
 
         stage('Check Tools') {
-            steps {
-                script {
-                    def changedServices = env.CHANGED_SERVICES ? env.CHANGED_SERVICES.split(',').findAll { it?.trim() } : []
-
-                    if (changedServices.isEmpty()) {
-                        echo 'No service changes detected. Skipping tool checks.'
-                        return
-                    }
-
-                    sh 'which gitleaks && gitleaks version'
-                    sh 'snyk --version || echo "Snyk CLI is downloading or not in PATH yet"'
-                }
+    steps {
+        script {
+            // Lấy đường dẫn thực tế từ Jenkins Tools
+            def jdkHome = tool name: 'Java 21', type: 'jdk'
+            def snykHome = tool name: 'snyk', type: 'com.isencia.jenkins.plugin.snyk.SnykStep$SnykInstallation'
+            
+            // Thiết lập môi trường để chạy lệnh sh
+            withEnv(["JAVA_HOME=${jdkHome}", "PATH+JDK=${jdkHome}/bin", "PATH+SNYK=${snykHome}"]) {
+                sh 'java -version'
+                sh 'mvn -version'
+                sh 'snyk --version'
+                sh 'gitleaks version'
             }
         }
+    }
+}
 
         stage('Gitleaks Scan') {
             steps {
