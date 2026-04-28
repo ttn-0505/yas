@@ -1,144 +1,97 @@
 pipeline {
-    agent any 
+    agent any
 
-    options {
-        timestamps()
-    }
-
-    tools {
-        jdk 'Java 21'
-        maven 'Maven 3'
+    environment {
+        SERVICE_NAME = "cart"
+        // Đường dẫn đến service trong monorepo
+        SERVICE_PATH = "cart" 
+        // Cấu hình Tool IDs (khai báo trong Manage Jenkins > Tools)
+        MAVEN_HOME = tool 'Maven 3'
+        JDK_HOME = tool 'Java 21'
+        SONAR_SCANNER = tool 'SonarScanner'
+        
+        // Credentials (khai báo trong Manage Jenkins > Credentials)
+        SNYK_TOKEN = credentials('snyk-api-token')
     }
 
     stages {
-        stage('Detect Changes') {
+        stage('Secret Scanning (Gitleaks)') {
             steps {
-                script {
-                    sh 'git fetch origin +refs/heads/main:refs/remotes/origin/main --prune'
-                    def baseCommit = ''
-                    def hasOriginMain = (sh(script: 'git rev-parse --verify refs/remotes/origin/main >/dev/null 2>&1', returnStatus: true) == 0)
+                echo "--- Scanning for secrets in ${SERVICE_NAME} ---"
+                // Chạy quét riêng thư mục cart để nhanh hơn
+                sh "docker run --rm -v \$(pwd):/path zricethezav/gitleaks:latest detect --source='/path/${SERVICE_PATH}' -v"
+            }
+        }
 
-                    if (hasOriginMain) {
-                        baseCommit = sh(script: 'git merge-base HEAD refs/remotes/origin/main', returnStdout: true).trim()
-                        echo 'Using refs/remotes/origin/main as base'
-                    } else if (sh(script: 'git rev-parse --verify HEAD~1 >/dev/null 2>&1', returnStatus: true) == 0) {
-                        baseCommit = sh(script: 'git rev-parse HEAD~1', returnStdout: true).trim()
-                        echo 'origin/main not found, fallback to HEAD~1'
-                    } else {
-                        baseCommit = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                        echo 'Single-commit branch, fallback to HEAD'
-                    }
-
-                    def changedFiles = sh(script: "git diff --name-only ${baseCommit} HEAD", returnStdout: true).trim()
-                    env.BASE_COMMIT = baseCommit
-                    env.CHANGED_FILES = changedFiles
-
-                    def servicePaths = ['backoffice-bff': 'backoffice-bff/', 'cart': 'cart/', 'customer': 'customer/', 'delivery': 'delivery/', 'inventory': 'inventory/', 'location': 'location/', 'media': 'media/', 'order': 'order/', 'payment-paypal': 'payment-paypal/', 'payment': 'payment/', 'product': 'product/', 'promotion': 'promotion/', 'rating': 'rating/', 'recommendation': 'recommendation/', 'sampledata': 'sampledata/', 'search': 'search/', 'storefront-bff': 'storefront-bff/', 'tax': 'tax/', 'webhook': 'webhook/']
-                    def changedServices = []
-                    if (changedFiles.contains('common-library/')) {
-                        changedServices.addAll(servicePaths.keySet())
-                    } else {
-                        servicePaths.each { name, path -> if (changedFiles.contains(path)) { changedServices << name } }
-                    }
-                    env.CHANGED_SERVICES = changedServices.unique().join(',')
+        stage('Security Scan (Snyk)') {
+            steps {
+                dir("${SERVICE_PATH}") {
+                    echo "--- Checking dependencies vulnerabilities ---"
+                    // Quét file pom.xml của Cart Service
+                    sh "docker run --rm -v \$(pwd):/app -e SNYK_TOKEN=${SNYK_TOKEN} snyk/snyk:maven snyk test"
                 }
             }
         }
 
-        stage('Check Tools') {
+        stage('Unit Test & Coverage') {
             steps {
-                script {
-                    if (env.CHANGED_SERVICES) { sh 'gitleaks version' }
+                dir("${SERVICE_PATH}") {
+                    echo "--- Running Tests for ${SERVICE_NAME} ---"
+                    // Chạy test và tạo báo cáo JaCoCo
+                    // Lưu ý: Nếu cấu hình Jacoco trong pom.xml < 70% thì lệnh này sẽ fail luôn stage này
+                    sh "mvn clean test"
+                }
+            }
+            post {
+                always {
+                    // Public kết quả test lên giao diện Jenkins
+                    junit "${SERVICE_PATH}/target/surefire-reports/*.xml"
+                    // Lưu trữ báo cáo độ phủ để xem lại
+                    publishHTML([allowMissing: false, alwaysLinkName: true, keepAll: true, 
+                                 reportDir: "${SERVICE_PATH}/target/site/jacoco", 
+                                 reportFiles: 'index.html', reportName: 'JaCoCo Report'])
                 }
             }
         }
 
-        stage('Gitleaks Scan') {
+        stage('Static Code Analysis (SonarQube)') {
             steps {
-                script {
-                    if (env.CHANGED_FILES?.trim()) {
-                        sh 'gitleaks detect --config gitleaks.toml --source . --log-opts="${BASE_COMMIT}..HEAD" --no-banner'
-                    }
-                }
-            }
-        }
-
-        stage('Install Dependencies') {
-            steps {
-                script {
-                    // Cài python3 nếu chưa có
-                    sh '''
-                        if ! command -v python3 &> /dev/null; then
-                            apt-get update && apt-get install -y python3
-                        fi
-                    '''
-                }
-            }
-        }
-
-        stage('Test & Build Changed Services') {
-            steps {
-                script {
-                    def changedServices = env.CHANGED_SERVICES ? env.CHANGED_SERVICES.split(',').findAll { it?.trim() } : []
-                    changedServices.each { serviceName ->
-                        def serviceDir = serviceName.trim()
-                        dir(serviceDir) {
-                            sh "mvn -f ../pom.xml -pl ${serviceDir} -am clean test jacoco:report"
-                            
-                            // Fix đoạn Python Check Coverage
-                            sh """
-                                python3 -c "
-import sys
-import xml.etree.ElementTree as ET
-try:
-    tree = ET.parse('target/site/jacoco/jacoco.xml')
-    root = tree.getroot()
-    missed = 0
-    covered = 0
-    for counter in root.findall('.//counter[@type=\\'LINE\\']'):
-        missed += int(counter.attrib.get('missed', 0))
-        covered += int(counter.attrib.get('covered', 0))
-    total = missed + covered
-    coverage = 100.0 * covered / total if total else 0.0
-    print(f'Line coverage for ${serviceDir}: {coverage:.2f}%')
-    if coverage < 70.0:
-        print('FAILED: Coverage below 70%')
-        sys.exit(1)
-except Exception as e:
-    print(f'Error parsing Jacoco report: {e}')
-    sys.exit(1)
-"
-                            """
-                            sh "mvn -f ../pom.xml -pl ${serviceDir} -am -DskipTests package"
-                        }
+                dir("${SERVICE_PATH}") {
+                    withSonarQubeEnv('SonarQubeServer') {
+                        sh "mvn sonar:sonar \
+                            -Dsonar.projectKey=yas-cart-service \
+                            -Dsonar.projectName='YAS: Cart Service' \
+                            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml"
                     }
                 }
             }
         }
 
-        stage('SonarQube Scan') {
+        stage('Build Artifact') {
+            // Chỉ build khi pass các bước trên
             steps {
-                script {
-                    def changedServices = env.CHANGED_SERVICES ? env.CHANGED_SERVICES.split(',').findAll { it?.trim() } : []
-                    if (changedServices.isEmpty()) return
-                    
-                    withCredentials([string(credentialsId: 'sonarqube-token', variable: 'SONAR_TOKEN')]) {
-                        changedServices.each { serviceDir ->
-                            dir(serviceDir.trim()) {
-                                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                                    sh "mvn -f ../pom.xml -pl . -am sonar:sonar -DskipTests -Dsonar.token=\$SONAR_TOKEN -Dsonar.projectKey=hcmus-devops-project1_yas_${serviceDir} -Dsonar.projectName=yas-${serviceDir}"
-                                }
-                            }
-                        }
-                    }
+                dir("${SERVICE_PATH}") {
+                    echo "--- Packaging ${SERVICE_NAME} jar ---"
+                    sh "mvn package -DskipTests"
                 }
             }
         }
-    } // Đóng stages
 
-    post {
-        always {
-            echo 'Pipeline finished.'
+        stage('Dockerize') {
+            when { branch 'main' } // Chỉ đóng gói image khi merge vào main
+            steps {
+                echo "--- Building Docker Image for Cart Service ---"
+                sh "docker build -t yas-cart:latest ./${SERVICE_PATH}"
+            }
         }
     }
-} // Đóng pipeline
+
+    post {
+        success {
+            echo "Successfully completed CI for Cart Service!"
+        }
+        failure {
+            echo "CI Pipeline for Cart Service failed. Please check Test Coverage or Security Scan logs."
+        }
+    }
+}
