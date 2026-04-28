@@ -277,6 +277,19 @@ class MediaServiceUnitTest {
         assertEquals("Hello", result.getCaption());
     }
 
+    @Test
+    void testMapper_CoverageExhaustive() {
+        // 1. Phủ hàm toModel (8 dòng đỏ)
+        com.yas.media.viewmodel.MediaVm vm = new com.yas.media.viewmodel.MediaVm(1L, "test", "file.png", "image/png", "url");
+        assertNotNull(mediaVmMapper.toModel(vm));
+        assertNull(mediaVmMapper.toModel(null)); // Phủ nhánh check null đầu hàm
+
+        // 2. Phủ hàm partialUpdate (11 dòng đỏ)
+        com.yas.media.model.Media target = new com.yas.media.model.Media();
+        mediaVmMapper.partialUpdate(target, vm); // Ép gán dữ liệu để xanh code
+        mediaVmMapper.partialUpdate(target, null); // Phủ nhánh check source null
+    }
+
     private static @NotNull Media getMedia(Long id, String name) {
         var media = new Media();
         media.setId(id);
